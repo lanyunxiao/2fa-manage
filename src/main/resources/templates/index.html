@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2FA 验证码管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* 进度条区域 */
+        .timer-section {
+            margin-bottom: 24px;
+        }
+
+        .timer-bar {
+            width: 100%;
+            height: 4px;
+            background: #1a1a2e;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .timer-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 1s linear;
+        }
+
+        .timer-text {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #888;
+        }
+
+        /* 验证码卡片 */
+        .code-card {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .code-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            border-radius: 4px 0 0 4px;
+        }
+
+        .code-card:nth-child(3n+1)::before {
+            background: linear-gradient(180deg, #667eea, #764ba2);
+        }
+        .code-card:nth-child(3n+2)::before {
+            background: linear-gradient(180deg, #f093fb, #f5576c);
+        }
+        .code-card:nth-child(3n+3)::before {
+            background: linear-gradient(180deg, #4facfe, #00f2fe);
+        }
+
+        .code-card-title {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code-card-title .delete-btn {
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .code-card-title .delete-btn:hover {
+            color: #f5576c;
+            background: rgba(245, 87, 108, 0.1);
+        }
+
+        .code-display {
+            font-size: 40px;
+            font-weight: 700;
+            letter-spacing: 6px;
+            font-variant-numeric: tabular-nums;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .code-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .code-row .copy-btn {
+            margin-left: 0;
+            flex-shrink: 0;
+        }
+
+        .copy-btn {
+            background: rgba(102, 126, 234, 0.15);
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 10px 24px;
+            border-radius: 10px;
+            transition: all 0.2s;
+            margin-left: 12px;
+            font-weight: 500;
+        }
+
+        .copy-btn:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        .copy-btn.copied {
+            background: rgba(52, 211, 153, 0.15);
+            color: #34d399;
+        }
+
+        /* 添加表单 */
+        .add-section {
+            background: #1a1a2e;
+            border: 1px dashed #2a2a4a;
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 32px;
+        }
+
+        .add-section h3 {
+            font-size: 16px;
+            color: #888;
+            margin-bottom: 16px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .form-row input {
+            flex: 1;
+            background: #0f0f1a;
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: #e0e0e0;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-row input:focus {
+            border-color: #667eea;
+        }
+
+        .form-row input::placeholder {
+            color: #444;
+        }
+
+        .add-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .add-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .add-btn:active {
+            transform: translateY(0);
+        }
+
+        /* empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #444;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #34d399;
+            color: #0f0f1a;
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            z-index: 1000;
+            animation: slideDown 0.3s ease;
+        }
+
+        /* 扫码按钮 */
+        .scan-btn {
+            width: 100%;
+            background: transparent;
+            border: 1px solid #667eea;
+            border-radius: 10px;
+            padding: 12px;
+            color: #667eea;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .scan-btn:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 2FA 验证码</h1>
+            <p class="subtitle">两步验证码自动刷新 · 30秒更新</p>
+        </div>
+
+        <!-- 倒计时进度条 -->
+        <div class="timer-section">
+            <div class="timer-bar">
+                <div class="timer-bar-fill" id="timerFill"></div>
+            </div>
+            <div class="timer-text" id="timerText">30 秒后刷新</div>
+        </div>
+
+        <!-- 验证码列表 -->
+        <div id="codeList">
+            <div class="empty-state" th:if="${codes.empty}">
+                <div class="icon">📱</div>
+                <p>还没有添加账号，请在下方添加</p>
+            </div>
+        </div>
+
+        <!-- 添加账号 -->
+        <div class="add-section">
+            <h3>添加新账号</h3>
+            <button class="scan-btn" onclick="document.getElementById('qrFileInput').click()">
+                <span>📷</span> 上传二维码识别
+            </button>
+            <input type="file" id="qrFileInput" accept="image/*" style="display:none" onchange="handleQrFile(this.files[0])">
+            <div class="form-row">
+                <input type="text" id="accountName" placeholder="账号名称（如 GitHub）">
+            </div>
+            <div class="form-row">
+                <input type="text" id="accountSecret" placeholder="Base32 密钥（如 JBSWY3DPEHPK3PXP）">
+            </div>
+            <button class="add-btn" onclick="addAccount()">添加账号</button>
+        </div>
+    </div>
+
+    <!-- 用于二维码扫描的隐藏容器 -->
+    <div id="qr-file-reader" style="display:none;"></div>
+    <!-- Toast -->
+    <div id="toast" class="toast" style="display:none;"></div>
+
+    <script>
+        let remainingSeconds = /*[[${remainingSeconds}]]*/ 30;
+
+        // 初始化渲染
+        fetchCodes();
+
+        function fetchCodes() {
+            fetch('/api/codes')
+                .then(res => res.json())
+                .then(data => {
+                    remainingSeconds = data.remainingSeconds;
+                    updateTimer();
+                    renderCodes(data.codes);
+                });
+        }
+
+        function updateTimer() {
+            const pct = (remainingSeconds / 30) * 100;
+            const fill = document.getElementById('timerFill');
+            fill.style.width = pct + '%';
+
+            // 根据剩余时间改变颜色
+            if (remainingSeconds <= 5) {
+                fill.style.background = 'linear-gradient(90deg, #f5576c, #f093fb)';
+            } else if (remainingSeconds <= 10) {
+                fill.style.background = 'linear-gradient(90deg, #f6d365, #fda085)';
+            } else {
+                fill.style.background = 'linear-gradient(90deg, #667eea, #764ba2)';
+            }
+
+            document.getElementById('timerText').textContent =
+                remainingSeconds + ' 秒后刷新';
+        }
+
+        function renderCodes(codes) {
+            const container = document.getElementById('codeList');
+            if (codes.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📱</div>
+                        <p>还没有添加账号，请在下方添加</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = codes.map((c, i) => `
+                <div class="code-card">
+                    <div class="code-card-title">
+                        <span>${escapeHtml(c.name)}</span>
+                        <button class="delete-btn" onclick="deleteAccount(${i})">✕</button>
+                    </div>
+                    <div class="code-row">
+                        <div class="code-display" style="font-size:${c.code.length > 6 ? '32px' : '40px'}">
+                            ${formatCode(c.code)}
+                        </div>
+                        <button class="copy-btn" onclick="copyCode('${c.code}', this)">复制</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function formatCode(code) {
+            if (code.length <= 6) return code;
+            // 有些验证码是8位的，中间加空格方便阅读
+            const mid = Math.floor(code.length / 2);
+            return code.substring(0, mid) + ' ' + code.substring(mid);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function copyCode(code, btn) {
+            const doCopy = () => {
+                btn.textContent = '已复制!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '复制';
+                    btn.classList.remove('copied');
+                }, 1500);
+            };
+
+            // 优先使用现代 API
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(code).then(doCopy).catch(() => fallbackCopy(code, btn));
+            } else {
+                fallbackCopy(code, btn);
+            }
+        }
+
+        function fallbackCopy(text, btn) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            textarea.style.top = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                btn.textContent = '已复制!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '复制';
+                    btn.classList.remove('copied');
+                }, 1500);
+            } catch (e) {
+                showToast('复制失败，请手动复制');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        function addAccount() {
+            const name = document.getElementById('accountName').value.trim();
+            const secret = document.getElementById('accountSecret').value.trim();
+
+            if (!name || !secret) {
+                showToast('请填写账号名称和密钥');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('secret', secret);
+
+            fetch('/add', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('accountName').value = '';
+                    document.getElementById('accountSecret').value = '';
+                    showToast('添加成功!');
+                    fetchCodes();
+                }
+            });
+        }
+
+        function deleteAccount(index) {
+            const formData = new FormData();
+            formData.append('index', index);
+
+            fetch('/delete', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('已删除');
+                    fetchCodes();
+                }
+            });
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 2000);
+        }
+
+        // 每秒更新倒计时，30秒时刷新数据
+        setInterval(() => {
+            remainingSeconds--;
+            if (remainingSeconds <= 0) {
+                fetchCodes();
+            } else {
+                updateTimer();
+            }
+        }, 1000);
+
+        // 支持回车键提交
+        document.getElementById('accountSecret').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                addAccount();
+            }
+        });
+
+        // ==================== 二维码识别（上传图片） ====================
+        function handleQrFile(file) {
+            if (!file) return;
+            document.getElementById('qrFileInput').value = '';
+
+            if (typeof Html5Qrcode === 'undefined') {
+                showToast('二维码库加载失败，请刷新页面后重试');
+                return;
+            }
+
+            showToast('正在识别二维码...');
+            const html5QrCode = new Html5Qrcode("qr-file-reader");
+            html5QrCode.scanFile(file, true)
+                .then(decodedText => {
+                    const parsed = parseOtpAuthUrl(decodedText);
+                    if (parsed) {
+                        document.getElementById('accountName').value = parsed.name;
+                        document.getElementById('accountSecret').value = parsed.secret;
+                        showToast('识别成功：' + parsed.name);
+                    } else {
+                        document.getElementById('accountSecret').value = decodedText.replace(/\s+/g, '').toUpperCase();
+                        showToast('已识别密钥，请输入账号名称');
+                    }
+                })
+                .catch(err => {
+                    showToast('识别失败，请确认图片包含有效二维码');
+                    console.error('QR scan error:', err);
+                });
+        }
+
+        /**
+         * 解析 otpauth:// URL
+         * 格式: otpauth://totp/Issuer:Account?secret=XXX&issuer=Issuer
+         * 使用正则直接解析原始字符串，避免不同浏览器对非标准协议 URL 解析不一致
+         */
+        function parseOtpAuthUrl(url) {
+            try {
+                if (!url.startsWith('otpauth://totp/') && !url.startsWith('otpauth://hotp/')) return null;
+
+                // 从原始字符串提取 label（路径部分 / 到 ? 之间）
+                const labelMatch = url.match(/^otpauth:\/\/t(?:ot|hot)p\/([^?]+)/);
+                // 从原始字符串提取 secret 参数
+                const secretMatch = url.match(/[?&]secret=([^&]+)/i);
+                if (!secretMatch) return null;
+
+                const secret = secretMatch[1].replace(/\s+/g, '').toUpperCase();
+                let label = decodeURIComponent(labelMatch[1] || '');
+
+                // 去除可能的前导斜杠
+                label = label.replace(/^\/+/, '');
+
+                // 提取 issuer 参数
+                const issuerMatch = url.match(/[?&]issuer=([^&]*)/i);
+                const issuer = issuerMatch ? decodeURIComponent(issuerMatch[1]) : '';
+
+                let name = '';
+                if (label.includes(':')) {
+                    name = label.split(':')[1] || label;
+                } else {
+                    name = label;
+                }
+                // 如果有 issuer 且名称不含 issuer，拼上
+                if (issuer && !name.includes(issuer) && name !== label) {
+                    name = issuer + ': ' + name;
+                }
+                if (!name.trim()) {
+                    name = issuer || 'Unknown';
+                }
+
+                return {
+                    name: name,
+                    secret: secret
+                };
+            } catch (e) {
+                return null;
+            }
+        }
+    </script>
+</body>
+</html>
